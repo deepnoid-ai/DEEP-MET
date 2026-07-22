@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+ENV/
+
+# nnU-Net / nnDetection runtime data & weights (too large for git)
+*.pth
+*.model
+*.npy
+*.npz
+*.b2nd
+
+# editor/agent
+.idea/
+.vscode/
+CLAUDE.md
+AGENTS.md

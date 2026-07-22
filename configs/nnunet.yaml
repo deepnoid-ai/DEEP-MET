@@ -1,0 +1,106 @@
+# ==============================================================================
+# nnUNet inference + post-processing config (BraTS-METS final submission)
+#
+#   MODEL_A = RC specialist  (conventional, binary {0: background, 1: RC})
+#   MODEL_B = primary        (region-based, full challenge labels 1/2/3/4)
+#
+# tests/nnunet_test.py reads this file and runs one of:
+#   MODE: A_ONLY -> predict A -> remap (MODEL_A.REMAP) -> optional postprocess
+#   MODE: B_ONLY -> predict B -> optional postprocess          (B needs no remap)
+#   MODE: MERGE  -> predict A -> remap A (MERGE.REMAP, always) -> [opt post A]
+#                   predict B                                  -> [opt post B]
+#                   merge A into B (B-priority)
+#                 (final merged output is NOT post-processed; post is done per
+#                  model before merge, i.e. a_post+b_post style)
+#
+# POSTPROCESS thresholds are PER CLASS (mm^3) keyed by label NAME; 0 = do not
+# filter that class. LABELS maps each name to its integer value.
+# ==============================================================================
+
+MODE: MERGE            # A_ONLY | B_ONLY | MERGE
+
+DEVICE: "0"            # CUDA_VISIBLE_DEVICES
+
+# Input test images (nnU-Net layout: <case>_0000.nii.gz, _0001, _0002, _0003)
+INPUT_DIR: /nnUNet_raw/Dataset00X/imagesTs
+
+# All outputs are written under here (each stage in its own subfolder)
+OUTPUT_BASE: /nnunet_final
+
+# Optional: override nnU-Net env vars (leave blank to use the shell environment)
+ENV:
+  NNUNET_RESULTS: ""
+  NNUNET_RAW: ""
+  NNUNET_PREPROCESSED: ""
+
+# Label name -> integer value (used to resolve POSTPROCESS thresholds by name)
+LABELS:
+  NETC: 1
+  SNFH: 2
+  ET: 3
+  RC: 4
+
+# ---- Prediction options (shared by both models) ----
+PREDICT:
+  STEP_SIZE: 0.5
+  DISABLE_TTA: false     # true = no mirroring TTA (faster)
+  NPP: 2                 # preprocessing workers
+  NPS: 2                 # export workers
+
+# ---- Model A: RC specialist (binary) ----
+MODEL_A:
+  DATASET: Dataset001_RCbinary
+  TRAINER: nnUNetTrainer
+  PLANS: nnUNetResEncUNetXLPlans
+  CONFIG: 3d_fullres
+  FOLDS: [all]
+  CHECKPOINT: checkpoint_final.pth
+  REMAP:                 # A is binary -> map to challenge RC label
+    ENABLED: true        # (A_ONLY mode) apply remap to A's output
+    SCHEME: binary       # binary ({0:bg,1:RC}->4) | 3-class ({0,1,2}: 2->4)
+    RC_LABEL: 4
+  POSTPROCESS:           # (A_ONLY mode) post-process A's final output
+    ENABLED: true
+    DEFAULT_MIN_VOL: 0
+    MIN_VOL_MM3:
+      RC: 5
+
+# ---- Model B: primary region-based (full challenge labels) ----
+MODEL_B:
+  DATASET: Dataset002_RegionBased
+  TRAINER: nnUNetTrainer
+  PLANS: nnUNetResEncUNetXLPlans
+  CONFIG: 3d_fullres
+  FOLDS: [all]
+  CHECKPOINT: checkpoint_final.pth
+  POSTPROCESS:           # (B_ONLY mode) post-process B's output
+    ENABLED: true
+    DEFAULT_MIN_VOL: 0
+    MIN_VOL_MM3:
+      NETC: 5
+      SNFH: 5
+      ET: 5
+      RC: 5
+
+# ---- Merge (MODE: MERGE only) ----
+# Final submission uses a_post + b_post: each model is (optionally) post-processed
+# BEFORE merging. The merged result itself is NOT post-processed.
+MERGE:
+  OVERLAP_MODE: component     # voxel | component  (how A's RC is added over B background)
+  RC_LABEL: 4
+  REMAP:                      # remap applied to A before merge (ALWAYS in MERGE)
+    SCHEME: binary
+    RC_LABEL: 4
+  POSTPROCESS_A:              # optional: post-process A (after remap) BEFORE merge
+    ENABLED: true
+    DEFAULT_MIN_VOL: 0
+    MIN_VOL_MM3:
+      RC: 5
+  POSTPROCESS_B:              # optional: post-process B BEFORE merge
+    ENABLED: true
+    DEFAULT_MIN_VOL: 0
+    MIN_VOL_MM3:
+      NETC: 5
+      SNFH: 5
+      ET: 5
+      RC: 5
