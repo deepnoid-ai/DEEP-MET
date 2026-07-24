@@ -129,10 +129,106 @@ Both models use the `nnUNetResEncUNetXLPlans` plan, the `3d_fullres` configurati
 
 ### nnDetection
 
-*(To be added — the nnDetection training procedure will be documented here.)*
+nnDetection is trained as a **small-lesion (ET) detector** that complements the nnU-Net
+segmentation. Only the **enhancing tumor (ET, label 3)** is used as the detection target,
+and each ET lesion is assigned a class by physical volume: **class 0 = small (<27 mm³)** —
+the detector's responsibility — and **class 1 = large (≥27 mm³)**. The 27 mm³ threshold
+and the ET-only, 26-connectivity lesion definition match the BraTS-MET evaluation protocol
+(LabelGroup `[3]`).
 
-Dataset-preparation helpers are provided under `src/data/nndet/`
-(`nnUNet_2_nnDet_ET.py`, `split_sri_native.py`).
+Two independent detection models are trained, one per coordinate space, because registered
+and unregistered cases have different geometry:
+
+- **Task002_Native** — cases on their original acquisition grid.
+- **Task003_SRI24** — cases registered to the SRI24 atlas (fixed 240×240×155 grid).
+
+Both use the `RetinaUNetV001_D3V001_3d` model. Training uses the **vendored `nnDetection/`**
+in this repository (modified with `do_seg=True`), so install it in editable mode first
+(this is also what the Dockerfile builds):
+
+```bash
+FORCE_CUDA=1 TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6" pip install -v -e ./nnDetection
+```
+
+#### 1. Prepare the detection datasets
+
+Start from the primary nnU-Net raw dataset (`Dataset001_BraTSMET`, channels
+`0=T1c, 1=T1n, 2=FLAIR, 3=T2w`) and produce the two nnDetection tasks in two steps.
+
+**a. Split by coordinate space.** `split_sri_native.py` inspects each case's image shape
+and routes it to `SRI24` (shape == 240×240×155) or `Native` (everything else), preserving
+the `imagesTr/imagesTs/labelsTr/labelsTs` layout:
+
+```bash
+python src/data/nndet/split_sri_native.py \
+    --dataset_dir <nnUNet_raw>/Dataset001_BraTSMET \
+    --output_root <split_root> \
+    --mode copy
+# -> <split_root>/SRI24/Dataset001_BraTSMET/...
+# -> <split_root>/Native/Dataset001_BraTSMET/...
+```
+
+**b. Convert each split to nnDetection ET-target format.** `nnUNet_2_nnDet_ET.py` turns the
+BraTS segmentations into per-lesion instance masks (+ `<case>.json` class maps) in
+nnDetection's `raw_splitted/` layout, writing directly into the detection data folder
+(`$det_data`). Run it once per space, naming the tasks so they match `run.sh` and the
+Dockerfile weight paths (`Task002_Native`, `Task003_SRI24`):
+
+```bash
+# Native -> Task002
+python src/data/nndet/nnUNet_2_nnDet_ET.py \
+    --nnunet_dataset_dir <split_root>/Native/Dataset001_BraTSMET \
+    --nndet_workspace    $det_data \
+    --task_name          Task002_Native
+
+# SRI24 -> Task003
+python src/data/nndet/nnUNet_2_nnDet_ET.py \
+    --nnunet_dataset_dir <split_root>/SRI24/Dataset001_BraTSMET \
+    --nndet_workspace    $det_data \
+    --task_name          Task003_SRI24
+```
+
+Each task ends up at `$det_data/TaskXXX/raw_splitted/{imagesTr,labelsTr,...}` with a
+`dataset.json` describing the two classes (`small_ET_lt27`, `large_ET_ge27`) and the four
+modalities. (Use `--copy_images` if symlinks are a problem on your filesystem.)
+
+#### 2. Set the environment variables
+
+```bash
+export det_data=<detection data folder>      # where Task002/Task003 live
+export det_models=<detection models folder>  # where trained weights are written
+```
+
+#### 3. Preprocess, train, and consolidate
+
+Run the nnDetection pipeline (`nndet_prep → nndet_unpack → nndet_train → nndet_consolidate`)
+for **each** task (`002` and `003`). Here we train a **single fold (fold 0)** rather than the
+full 5-fold CV:
+
+```bash
+# ---- example for Task002_Native (repeat with 003 for Task003_SRI24) ----
+
+# a. plan + preprocess
+nndet_prep 002
+
+# b. unpack the preprocessed data for faster training
+nndet_unpack ${det_data}/Task002_Native/preprocessed/D3V001_3d/imagesTr 6
+
+# c. train a single fold (fold 0)
+nndet_train 002 -o exp.fold=0
+
+# d. consolidate (single fold) + sweep inference boxes
+nndet_consolidate 002 RetinaUNetV001_D3V001_3d --num_folds 1 --sweep_boxes
+```
+
+Consolidation produces
+`${det_models}/Task002_Native/RetinaUNetV001_D3V001_3d/consolidated/`, which is exactly the
+path the Dockerfile copies (`COPY models/nndet/ ...`) and `run.sh` reads at inference time.
+Do the same for `Task003_SRI24`.
+
+> At inference, `run.sh` runs `nndet_predict` per task (`--num_tta 4`) and fuses the boxes
+> into the segmentation with `boxes_2_seg_4.py`, using `score_thresh=0.15` for Native and
+> `0.2` for SRI24.
 
 ---
 
