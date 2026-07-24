@@ -10,8 +10,8 @@ Two model label schemes are supported via --mode:
 Everything else becomes background. Output keeps the same affine/header as the input.
 
 Usage:
-    python remap_rc.py --input-dir <pred_dir> --output-dir <out_dir> --mode 3-class
-    python remap_rc.py --input-dir <pred_dir> --output-dir <out_dir> --mode binary
+    python remap_rc_pred_to_challenge.py --input-dir <pred_dir> --output-dir <out_dir> --mode 3-class
+    python remap_rc_pred_to_challenge.py --input-dir <pred_dir> --output-dir <out_dir> --mode binary
 """
 import argparse
 from pathlib import Path

@@ -14,9 +14,9 @@ The component-removal logic is identical to the original postprocess.py:
 
 Usage:
     # RC(label 4) filtered at 5 mm^3, others untouched:
-    python remove_component.py --input <pred_dir> --output <out_dir> --per-class "4:5"
+    python postprocess_5mm.py --input <pred_dir> --output <out_dir> --per-class "4:5"
     # all classes at 5 mm^3:
-    python remove_component.py --input <pred_dir> --output <out_dir> --default-min-vol 5
+    python postprocess_5mm.py --input <pred_dir> --output <out_dir> --default-min-vol 5
 """
 import argparse
 from pathlib import Path
@@ -81,13 +81,13 @@ def postprocess_folder(input_dir, output_dir,
     input_dir, output_dir = Path(input_dir), Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     pred_files = sorted(f for f in input_dir.glob(f"*{FILE_ENDING}") if "probs" not in f.name)
-    print(f"[remove_component] {len(pred_files)} files | per-class thresholds(mm^3)="
+    print(f"[postprocess_5mm] {len(pred_files)} files | per-class thresholds(mm^3)="
           f"{thresholds or 'none'} | default={default_min_vol}")
     for idx, pred_path in enumerate(pred_files, 1):
         postprocess_file(pred_path, output_dir / pred_path.name, thresholds, default_min_vol)
         if idx % 50 == 0 or idx == len(pred_files):
             print(f"  processed {idx}/{len(pred_files)}")
-    print(f"[remove_component] done -> {output_dir}")
+    print(f"[postprocess_5mm] done -> {output_dir}")
 
 
 # Default BraTS-METS label name -> integer value (used to resolve name-based thresholds).
