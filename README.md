@@ -1,4 +1,4 @@
-# MET-Framework — BraTS-MET 2026
+# DEEP-MET
 
 Automated brain-metastasis MRI segmentation framework for our submission to the
 **BraTS-MET 2026** challenge (Task 1).
