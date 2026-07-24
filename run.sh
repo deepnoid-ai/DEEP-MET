@@ -67,27 +67,27 @@ echo "================ STEP 2-2: nnUNetv2 predict RC ================"
     -npp 2 -nps 2
 
 echo "================ STEP 3: remap_RC ================"
-python "${SRC}//postprocess/remap_rc.py" \
+python "${SRC}/postprocess/remap_rc.py" \
     --input-dir "${NNUNET_OUT_RC}" \
     --output-dir "${NNUNET_OUT_RC}" \
     --mode  "binary"
 
 echo "================ STEP 3-1: postprocess RC ================"
-python "${SRC}//postprocess/postprocess_5mm.py" \
+python "${SRC}/postprocess/postprocess_5mm.py" \
     --input  "${NNUNET_OUT_RC}" \
     --output "${NNUNET_OUT_RC}" \
     --per-class "RC:5" \
     --default-min-vol 0
 
 echo "================ STEP 3-2: postprocess All ================"
-python "${SRC}//postprocess/postprocess_5mm.py" \
+python "${SRC}/postprocess/postprocess_5mm.py" \
     --input  "${NNUNET_OUT_ALL}" \
     --output "${NNUNET_OUT_ALL}" \
     --per-class "NETC:5,SNFH:5,ET:5,RC:5" \
     --default-min-vol 0
 
 echo "================ STEP 4: merge_RC ================"
-python "${SRC}//postprocess/merge_rc.py" \
+python "${SRC}/postprocess/merge_rc.py" \
     --a-dir "${NNUNET_OUT_RC}" \
     --b-dir "${NNUNET_OUT_ALL}" \
     --output-dir  "${NNUNET_OUT}"
