@@ -1,6 +1,6 @@
 # DEEP-MET
 
-Automated brain-metastasis MRI segmentation framework for our submission to the
+Automated brain-metastasis segmentation framework for our submission to the
 **BraTS-MET 2026** challenge (Task 1).
 
 The framework combines two self-configuring medical-imaging pipelines:
